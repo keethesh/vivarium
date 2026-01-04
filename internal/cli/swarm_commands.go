@@ -35,7 +35,7 @@ var swarmLocustCmd = &cobra.Command{
 Each worker in your comb file will be used to redirect traffic to the target,
 masking the origin of the requests.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := common.RequirePermission(HasPermission()); err != nil {
+		if err := common.RequireAuthorization(GetConfigPath()); err != nil {
 			return err
 		}
 		if swarmTarget == "" {

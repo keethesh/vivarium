@@ -32,7 +32,7 @@ var senseScoutCmd = &cobra.Command{
 Large assets (images, videos, downloads) make the best attack vectors
 as they consume the most server resources per request.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := common.RequirePermission(HasPermission()); err != nil {
+		if err := common.RequireAuthorization(GetConfigPath()); err != nil {
 			return err
 		}
 		if senseTarget == "" {

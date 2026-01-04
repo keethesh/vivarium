@@ -44,7 +44,7 @@ var locustCmd = &cobra.Command{
 	Long: `Locust devours resources with overwhelming speed.
 Sends high-concurrency HTTP GET requests to the target.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := common.RequirePermission(HasPermission()); err != nil {
+		if err := common.RequireAuthorization(GetConfigPath()); err != nil {
 			return err
 		}
 		if stingTarget == "" {
@@ -100,7 +100,7 @@ var tickCmd = &cobra.Command{
 	Long: `Tick latches on slowly and drains over time.
 Opens many connections and sends partial headers slowly to exhaust server resources.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := common.RequirePermission(HasPermission()); err != nil {
+		if err := common.RequireAuthorization(GetConfigPath()); err != nil {
 			return err
 		}
 		if stingTarget == "" {
@@ -154,7 +154,7 @@ var flyswarmCmd = &cobra.Command{
 	Long: `Fly Swarm unleashes chaotic UDP bombardment.
 Sends random UDP packets to overwhelm the target.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := common.RequirePermission(HasPermission()); err != nil {
+		if err := common.RequireAuthorization(GetConfigPath()); err != nil {
 			return err
 		}
 		if stingTarget == "" {
