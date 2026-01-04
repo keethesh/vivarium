@@ -30,6 +30,15 @@ type Result struct {
 	Duration      time.Duration // Total attack duration
 }
 
+// Progress contains real-time progress information.
+type Progress struct {
+	Total      int     // Total operations to complete
+	Completed  int     // Completed operations
+	Successful int     // Successful operations
+	Failed     int     // Failed operations
+	RPS        float64 // Requests per second
+}
+
 // Sting is the interface for all DoS attack types.
 type Sting interface {
 	// Attack executes the attack against the target.

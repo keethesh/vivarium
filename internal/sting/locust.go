@@ -134,3 +134,101 @@ func (l *Locust) sendRequest(ctx context.Context, target string, verbose bool) b
 	// Consider 2xx and 3xx as successful (we just want to consume resources)
 	return resp.StatusCode < 400
 }
+
+// AttackWithProgress executes the attack with progress callback for real-time updates.
+func (l *Locust) AttackWithProgress(ctx context.Context, target string, opts AttackOpts, progress chan<- Progress) (*Result, error) {
+	if opts.Concurrency <= 0 {
+		opts.Concurrency = 100
+	}
+	if opts.Rounds <= 0 {
+		opts.Rounds = 1000
+	}
+
+	var (
+		successful atomic.Int64
+		failed     atomic.Int64
+		completed  atomic.Int64
+	)
+
+	start := time.Now()
+
+	// Progress reporter
+	stopProgress := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stopProgress:
+				return
+			case <-ticker.C:
+				elapsed := time.Since(start).Seconds()
+				comp := completed.Load()
+				rps := float64(0)
+				if elapsed > 0 {
+					rps = float64(comp) / elapsed
+				}
+				progress <- Progress{
+					Total:      opts.Rounds,
+					Completed:  int(comp),
+					Successful: int(successful.Load()),
+					Failed:     int(failed.Load()),
+					RPS:        rps,
+				}
+			}
+		}
+	}()
+
+	// Create a channel to distribute work
+	jobs := make(chan int, opts.Rounds)
+	var wg sync.WaitGroup
+
+	// Start workers
+	for i := 0; i < opts.Concurrency; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case _, ok := <-jobs:
+					if !ok {
+						return
+					}
+					if l.sendRequest(ctx, target, false) {
+						successful.Add(1)
+					} else {
+						failed.Add(1)
+					}
+					completed.Add(1)
+
+					if opts.Delay > 0 {
+						time.Sleep(opts.Delay)
+					}
+				}
+			}
+		}(i)
+	}
+
+	// Send jobs
+	for i := 0; i < opts.Rounds; i++ {
+		select {
+		case <-ctx.Done():
+			break
+		case jobs <- i:
+		}
+	}
+	close(jobs)
+
+	// Wait for all workers to complete
+	wg.Wait()
+	close(stopProgress)
+
+	return &Result{
+		TotalRequests: int(completed.Load()),
+		Successful:    int(successful.Load()),
+		Failed:        int(failed.Load()),
+		Duration:      time.Since(start),
+	}, nil
+}

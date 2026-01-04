@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔷 Hexagon - Vivarium Control Center</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="hex-icon">⬡</span>
+                <h1>HEXAGON</h1>
+                <span class="version">v0.3.0</span>
+            </div>
+            <div class="connection-status" id="connectionStatus">
+                <span class="status-dot"></span>
+                <span class="status-text">Connecting...</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Attack Control Panel -->
+            <section class="panel attack-panel">
+                <h2>🎯 Attack Control</h2>
+                
+                <div class="form-group">
+                    <label for="target">Target URL / IP</label>
+                    <input type="text" id="target" placeholder="https://target.example.com" autocomplete="off">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="attackType">Attack Type</label>
+                        <select id="attackType">
+                            <option value="locust">🦗 Locust (HTTP Flood)</option>
+                            <option value="tick">🕷️ Tick (Slowloris)</option>
+                            <option value="flyswarm">🪰 FlySwarm (UDP Flood)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Locust Options -->
+                <div class="attack-options" id="locustOptions">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="locustRounds">Rounds</label>
+                            <input type="number" id="locustRounds" value="1000" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label for="locustConcurrency">Concurrency</label>
+                            <input type="number" id="locustConcurrency" value="100" min="1">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tick Options -->
+                <div class="attack-options hidden" id="tickOptions">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="tickSockets">Sockets</label>
+                            <input type="number" id="tickSockets" value="200" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label for="tickDelay">Delay</label>
+                            <input type="text" id="tickDelay" value="15s" placeholder="15s">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FlySwarm Options -->
+                <div class="attack-options hidden" id="flyswarmOptions">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="flyswarmRounds">Packets</label>
+                            <input type="number" id="flyswarmRounds" value="10000" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label for="flyswarmPort">Port</label>
+                            <input type="number" id="flyswarmPort" value="80" min="1" max="65535">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="flyswarmConcurrency">Concurrency</label>
+                            <input type="number" id="flyswarmConcurrency" value="100" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label for="flyswarmPacketSize">Packet Size</label>
+                            <input type="number" id="flyswarmPacketSize" value="1024" min="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="button-row">
+                    <button class="btn btn-primary" id="launchBtn">🚀 Launch Attack</button>
+                    <button class="btn btn-danger" id="stopBtn">⏹️ Stop All</button>
+                </div>
+            </section>
+
+            <!-- Stats Panel -->
+            <section class="panel stats-panel">
+                <h2>📊 Live Stats</h2>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="statRequests">0</div>
+                        <div class="stat-label">Requests</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value success" id="statSuccess">0</div>
+                        <div class="stat-label">Successful</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value danger" id="statFailed">0</div>
+                        <div class="stat-label">Failed</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value highlight" id="statRPS">0</div>
+                        <div class="stat-label">RPS</div>
+                    </div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">Ready</div>
+            </section>
+
+            <!-- Active Attacks -->
+            <section class="panel attacks-panel">
+                <h2>⚔️ Active Attacks</h2>
+                <div class="attacks-list" id="attacksList">
+                    <div class="empty-state">No active attacks</div>
+                </div>
+            </section>
+
+            <!-- Log Console -->
+            <section class="panel log-panel">
+                <h2>📜 Log</h2>
+                <div class="log-console" id="logConsole">
+                    <div class="log-entry info">Welcome to Hexagon - Vivarium Control Center</div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>🕷️ VIVARIUM - The ecosystem is the weapon</p>
+        </footer>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/ws.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
