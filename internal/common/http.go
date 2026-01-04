@@ -4,8 +4,58 @@ import (
 	"crypto/tls"
 	"net"
 	"net/http"
+	"net/url"
+	"sync"
 	"time"
+
+	"golang.org/x/net/proxy"
 )
+
+var (
+	globalProxy     string
+	globalProxyOnce sync.Once
+	globalDialer    proxy.Dialer
+)
+
+// SetGlobalProxy sets the global proxy URL for all HTTP clients.
+func SetGlobalProxy(proxyURL string) error {
+	if proxyURL == "" {
+		return nil
+	}
+
+	u, err := url.Parse(proxyURL)
+	if err != nil {
+		return err
+	}
+
+	var auth *proxy.Auth
+	if u.User != nil {
+		password, _ := u.User.Password()
+		auth = &proxy.Auth{
+			User:     u.User.Username(),
+			Password: password,
+		}
+	}
+
+	dialer, err := proxy.SOCKS5("tcp", u.Host, auth, proxy.Direct)
+	if err != nil {
+		return err
+	}
+
+	globalProxy = proxyURL
+	globalDialer = dialer
+	return nil
+}
+
+// GetGlobalProxy returns the current global proxy URL.
+func GetGlobalProxy() string {
+	return globalProxy
+}
+
+// IsProxyEnabled returns whether a global proxy is configured.
+func IsProxyEnabled() bool {
+	return globalProxy != "" && globalDialer != nil
+}
 
 // DefaultHTTPClient returns an HTTP client configured for stress testing.
 // It has aggressive timeouts and connection pooling.
@@ -24,6 +74,11 @@ func DefaultHTTPClient() *http.Client {
 			InsecureSkipVerify: true, // Skip cert verification for stress testing
 		},
 		DisableKeepAlives: false,
+	}
+
+	// Use proxy if configured
+	if IsProxyEnabled() {
+		transport.Dial = globalDialer.Dial
 	}
 
 	return &http.Client{
@@ -57,6 +112,11 @@ func FastHTTPClient() *http.Client {
 		DisableKeepAlives:     false,
 		DisableCompression:    true, // Skip decompression overhead
 		ResponseHeaderTimeout: 10 * time.Second,
+	}
+
+	// Use proxy if configured
+	if IsProxyEnabled() {
+		transport.Dial = globalDialer.Dial
 	}
 
 	return &http.Client{

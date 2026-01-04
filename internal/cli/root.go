@@ -17,7 +17,7 @@ const banner = `
 ╚██╗ ██╔╝██║╚██╗ ██╔╝██╔══██║██╔══██╗██║██║   ██║██║╚██╔╝██║
  ╚████╔╝ ██║ ╚████╔╝ ██║  ██║██║  ██║██║╚██████╔╝██║ ╚═╝ ██║
   ╚═══╝  ╚═╝  ╚═══╝  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝ ╚═════╝ ╚═╝     ╚═╝
-                                                     v0.6.0
+                                                     v0.7.0
     "The ecosystem is the weapon. Resistance is organic failure."
 `
 
@@ -51,6 +51,7 @@ func init() {
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ~/.vivarium/config.toml)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
+	rootCmd.PersistentFlags().String("proxy", "", "SOCKS5 proxy URL (e.g., socks5://127.0.0.1:9050 for Tor)")
 
 	// Add subcommands
 	rootCmd.AddCommand(stingCmd)
@@ -60,6 +61,12 @@ func init() {
 	rootCmd.AddCommand(forageCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(configCmd)
+}
+
+// GetProxyURL returns the --proxy flag value.
+func GetProxyURL() string {
+	proxy, _ := rootCmd.PersistentFlags().GetString("proxy")
+	return proxy
 }
 
 func initConfig() {
@@ -81,7 +88,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of Vivarium",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Vivarium v0.6.0 - The Swarm Engine")
+		fmt.Println("Vivarium v0.7.0 - The Swarm Engine")
 		fmt.Println("Built with Go 1.25")
 	},
 }
