@@ -17,7 +17,7 @@ const banner = `
 ╚██╗ ██╔╝██║╚██╗ ██╔╝██╔══██║██╔══██╗██║██║   ██║██║╚██╔╝██║
  ╚████╔╝ ██║ ╚████╔╝ ██║  ██║██║  ██║██║╚██████╔╝██║ ╚═╝ ██║
   ╚═══╝  ╚═╝  ╚═══╝  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝ ╚═════╝ ╚═╝     ╚═╝
-                                                     v0.7.0
+                                                     v0.8.0
     "The ecosystem is the weapon. Resistance is organic failure."
 `
 
@@ -88,7 +88,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of Vivarium",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Vivarium v0.7.0 - The Swarm Engine")
+		fmt.Println("Vivarium v0.8.0 - The Swarm Engine")
 		fmt.Println("Built with Go 1.25")
 	},
 }

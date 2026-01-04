@@ -19,6 +19,7 @@ var (
 	forageDorksFile  string
 	forageMaxPerDork int
 	forageValidate   bool
+	forageEngines    string
 )
 
 func init() {
@@ -29,6 +30,7 @@ func init() {
 	forageCmd.Flags().StringVarP(&forageDorksFile, "dorks", "d", "", "file with custom dork patterns (optional)")
 	forageCmd.Flags().IntVarP(&forageMaxPerDork, "max", "m", 20, "maximum results per dork")
 	forageCmd.Flags().BoolVarP(&forageValidate, "validate", "V", false, "validate discovered URLs (slower)")
+	forageCmd.Flags().StringVarP(&forageEngines, "engines", "e", "all", "comma-separated engines (google, bing, yahoo, ddg)")
 }
 
 func runForage(cmd *cobra.Command, args []string) error {
@@ -59,6 +61,16 @@ func runForage(cmd *cobra.Command, args []string) error {
 		fmt.Printf("   Using %d default dorks\n", len(dorks))
 	}
 
+	var engines []string
+	if forageEngines != "" && forageEngines != "all" {
+		engines = strings.Split(forageEngines, ",")
+	}
+	if len(engines) > 0 {
+		fmt.Printf("   Engines: %s\n", strings.Join(engines, ", "))
+	} else {
+		fmt.Printf("   Engines: all (Google, Bing, Yahoo, DuckDuckGo)\n")
+	}
+
 	fmt.Printf("   Max results per dork: %d\n\n", forageMaxPerDork)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -73,7 +85,7 @@ func runForage(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 
-	dorker := forage.NewDorker()
+	dorker := forage.NewDorker(engines)
 	result, err := dorker.Search(ctx, dorks, forageMaxPerDork, IsVerbose())
 	if err != nil && ctx.Err() == nil {
 		return fmt.Errorf("foraging failed: %w", err)
@@ -89,9 +101,12 @@ func runForage(cmd *cobra.Command, args []string) error {
 		fmt.Println("\n   Results by Dork:")
 		for _, dr := range result.DorkResults {
 			if dr.Error != "" {
-				fmt.Printf("     ✗ %s - Error: %s\n", truncateDork(dr.Dork, 40), dr.Error)
+				fmt.Printf("     [%s] ✗ %s - Error: %s\n", dr.Engine, truncateDork(dr.Dork, 40), dr.Error)
 			} else {
-				fmt.Printf("     ✓ %s - %d URLs\n", truncateDork(dr.Dork, 40), len(dr.URLs))
+				count := len(dr.URLs)
+				if count > 0 {
+					fmt.Printf("     [%s] ✓ %s - %d URLs\n", dr.Engine, truncateDork(dr.Dork, 40), count)
+				}
 			}
 		}
 	}

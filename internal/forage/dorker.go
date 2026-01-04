@@ -3,13 +3,10 @@ package forage
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
-	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"vivarium/internal/common"
@@ -34,11 +31,12 @@ var DefaultDorks = []string{
 	`inurl:"redirect_to="`,
 }
 
-// DorkResult contains results from a dork search.
+// DorkResult contains results for a single dork from a single engine.
 type DorkResult struct {
-	Dork  string
-	URLs  []string
-	Error string
+	Dork   string
+	Engine string
+	URLs   []string
+	Error  string
 }
 
 // SearchResult contains overall search results.
@@ -50,21 +48,50 @@ type SearchResult struct {
 	Duration    time.Duration
 }
 
-// Dorker searches for open redirect URLs using search engines.
+// Dorker searches for open redirect URLs using multiple search engines.
 type Dorker struct {
-	client *http.Client
+	client  *http.Client
+	engines []SearchEngine
 }
 
 // NewDorker creates a new Dorker instance.
-func NewDorker() *Dorker {
+// If engines is empty, defaults to all available engines.
+func NewDorker(engines []string) *Dorker {
+	client := common.DefaultHTTPClient()
+
+	// Create engine instances
+	var selectedEngines []SearchEngine
+
+	if len(engines) == 0 {
+		// Default to all
+		selectedEngines = []SearchEngine{
+			NewDuckDuckGo(client),
+			NewGoogle(client),
+			NewBing(client),
+			NewYahoo(client),
+		}
+	} else {
+		for _, name := range engines {
+			switch strings.ToLower(name) {
+			case "duckduckgo", "ddg":
+				selectedEngines = append(selectedEngines, NewDuckDuckGo(client))
+			case "google":
+				selectedEngines = append(selectedEngines, NewGoogle(client))
+			case "bing":
+				selectedEngines = append(selectedEngines, NewBing(client))
+			case "yahoo":
+				selectedEngines = append(selectedEngines, NewYahoo(client))
+			}
+		}
+	}
+
 	return &Dorker{
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		client:  client,
+		engines: selectedEngines,
 	}
 }
 
-// Search performs dork searches using DuckDuckGo.
+// Search performs dork searches using configured engines.
 func (d *Dorker) Search(ctx context.Context, dorks []string, maxPerDork int, verbose bool) (*SearchResult, error) {
 	start := time.Now()
 
@@ -77,35 +104,81 @@ func (d *Dorker) Search(ctx context.Context, dorks []string, maxPerDork int, ver
 
 	result := &SearchResult{
 		TotalDorks:  len(dorks),
-		DorkResults: make([]DorkResult, 0, len(dorks)),
+		DorkResults: make([]DorkResult, 0, len(dorks)*len(d.engines)),
 	}
 
 	seenURLs := make(map[string]bool)
+	var mu sync.Mutex
 
+	// Process dorks sequentially to stay polite, but engines in parallel for each dork
 	for i, dork := range dorks {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return result, ctx.Err()
-		default:
 		}
 
 		if verbose {
 			fmt.Printf("   [%d/%d] Searching: %s\n", i+1, len(dorks), dork)
 		}
 
-		dorkResult := d.searchDork(ctx, dork, maxPerDork, verbose)
-		result.DorkResults = append(result.DorkResults, dorkResult)
+		// Search concurrently across engines for this dork
+		var wg sync.WaitGroup
+		engineResults := make(chan DorkResult, len(d.engines))
 
-		// Collect unique URLs
-		for _, u := range dorkResult.URLs {
-			if !seenURLs[u] {
-				seenURLs[u] = true
-				result.UniqueURLs = append(result.UniqueURLs, u)
-				result.TotalURLs++
-			}
+		for _, engine := range d.engines {
+			wg.Add(1)
+			go func(e SearchEngine) {
+				defer wg.Done()
+
+				// Add small random delay to stagger requests
+				time.Sleep(time.Duration(common.RandomInt(100, 500)) * time.Millisecond)
+
+				urls, err := e.Search(ctx, dork, maxPerDork)
+
+				// Identify and filter for open redirects locally
+				validURLs := make([]string, 0)
+				for _, u := range urls {
+					if LooksLikeRedirect(u) {
+						validURLs = append(validURLs, u)
+					}
+				}
+
+				res := DorkResult{
+					Dork:   dork,
+					Engine: e.Name(),
+					URLs:   validURLs,
+				}
+				if err != nil {
+					res.Error = err.Error()
+				}
+				engineResults <- res
+
+				if verbose && len(validURLs) > 0 {
+					fmt.Printf("      %s found %d URLs\n", e.Name(), len(validURLs))
+				}
+				// if verbose && err != nil {
+				// 	fmt.Printf("      %s error: %v\n", e.Name(), err)
+				// }
+			}(engine)
 		}
 
-		// Rate limit between searches
+		wg.Wait()
+		close(engineResults)
+
+		// Collect results
+		for res := range engineResults {
+			mu.Lock()
+			result.DorkResults = append(result.DorkResults, res)
+			for _, u := range res.URLs {
+				if !seenURLs[u] {
+					seenURLs[u] = true
+					result.UniqueURLs = append(result.UniqueURLs, u)
+					result.TotalURLs++
+				}
+			}
+			mu.Unlock()
+		}
+
+		// Sleep between dorks
 		time.Sleep(2 * time.Second)
 	}
 
@@ -113,97 +186,8 @@ func (d *Dorker) Search(ctx context.Context, dorks []string, maxPerDork int, ver
 	return result, nil
 }
 
-// searchDork performs a single dork search using DuckDuckGo's HTML interface.
-func (d *Dorker) searchDork(ctx context.Context, dork string, maxResults int, verbose bool) DorkResult {
-	result := DorkResult{
-		Dork: dork,
-		URLs: make([]string, 0),
-	}
-
-	// DuckDuckGo HTML search
-	searchURL := fmt.Sprintf("https://html.duckduckgo.com/html/?q=%s", url.QueryEscape(dork))
-
-	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
-	if err != nil {
-		result.Error = err.Error()
-		return result
-	}
-
-	req.Header.Set("User-Agent", common.RandomUserAgent())
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
-
-	resp, err := d.client.Do(req)
-	if err != nil {
-		result.Error = err.Error()
-		return result
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		result.Error = err.Error()
-		return result
-	}
-
-	// Extract URLs from DuckDuckGo results
-	urls := d.extractURLsFromDDG(string(body))
-
-	// Filter and clean URLs
-	for _, u := range urls {
-		if len(result.URLs) >= maxResults {
-			break
-		}
-
-		// Only include URLs that look like open redirects
-		if d.looksLikeRedirect(u) {
-			result.URLs = append(result.URLs, u)
-			if verbose {
-				fmt.Printf("      Found: %s\n", truncateString(u, 80))
-			}
-		}
-	}
-
-	return result
-}
-
-// extractURLsFromDDG extracts result URLs from DuckDuckGo HTML.
-func (d *Dorker) extractURLsFromDDG(html string) []string {
-	urls := make([]string, 0)
-
-	// DuckDuckGo uses uddg parameter for actual URLs
-	// Pattern: uddg=https%3A%2F%2F...
-	uddgPattern := regexp.MustCompile(`uddg=([^&"]+)`)
-	matches := uddgPattern.FindAllStringSubmatch(html, -1)
-
-	for _, match := range matches {
-		if len(match) >= 2 {
-			decodedURL, err := url.QueryUnescape(match[1])
-			if err == nil && strings.HasPrefix(decodedURL, "http") {
-				urls = append(urls, decodedURL)
-			}
-		}
-	}
-
-	// Also try to find direct href links
-	hrefPattern := regexp.MustCompile(`href="(https?://[^"]+)"`)
-	hrefMatches := hrefPattern.FindAllStringSubmatch(html, -1)
-
-	for _, match := range hrefMatches {
-		if len(match) >= 2 {
-			u := match[1]
-			// Skip DuckDuckGo internal links
-			if !strings.Contains(u, "duckduckgo.com") {
-				urls = append(urls, u)
-			}
-		}
-	}
-
-	return urls
-}
-
-// looksLikeRedirect checks if a URL contains redirect-related parameters.
-func (d *Dorker) looksLikeRedirect(u string) bool {
+// LooksLikeRedirect checks if a URL contains redirect-related parameters.
+func LooksLikeRedirect(u string) bool {
 	lower := strings.ToLower(u)
 	redirectParams := []string{
 		"redirect", "redir", "url=", "next=", "goto=", "dest=",
@@ -224,26 +208,4 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
-}
-
-// DuckDuckGo API response structure (for future use)
-type ddgAPIResponse struct {
-	Results []struct {
-		URL   string `json:"u"`
-		Title string `json:"t"`
-	} `json:"results"`
-}
-
-// parseJSONResponse parses DuckDuckGo API JSON response.
-func parseJSONResponse(data []byte) ([]string, error) {
-	var resp ddgAPIResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, err
-	}
-
-	urls := make([]string, 0, len(resp.Results))
-	for _, r := range resp.Results {
-		urls = append(urls, r.URL)
-	}
-	return urls, nil
 }
