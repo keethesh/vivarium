@@ -34,7 +34,10 @@ These are single-origin DoS attacks designed for stress testing.
 Available stings:
   locust    - HTTP GET flood (devours resources with overwhelming speed)
   tick      - Slowloris (latches on slowly, drains over time)
-  flyswarm  - UDP flood (chaotic bombardment)`,
+  flyswarm  - UDP flood (chaotic bombardment)
+  pollen    - Oversized URI path attack (scatters like pollen)
+  firefly   - Varied HTTP headers (lights up like bioluminescence)
+  molt      - HTTP method stress (sheds methods like exoskeleton)`,
 }
 
 // locustCmd represents the locust attack
@@ -205,6 +208,171 @@ Sends random UDP packets to overwhelm the target.`,
 	},
 }
 
+// pollenCmd represents the pollen burst attack
+var pollenCmd = &cobra.Command{
+	Use:   "pollen",
+	Short: "Pollen Burst - oversized URI path attack",
+	Long: `Pollen Burst scatters oversized URI requests.
+Exploits buffer handling with very long URL paths.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := common.RequireAuthorization(GetConfigPath()); err != nil {
+			return err
+		}
+		if stingTarget == "" {
+			return fmt.Errorf("--target is required")
+		}
+
+		fmt.Println("\n🌸 POLLEN BURST - Scattering oversized requests...")
+		fmt.Printf("   Target: %s\n", stingTarget)
+		fmt.Printf("   Rounds: %d\n", stingRounds)
+		fmt.Printf("   Concurrency: %d\n", stingConcurrency)
+		fmt.Println()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigChan
+			fmt.Println("\n\n🛑 Received interrupt, stopping attack...")
+			cancel()
+		}()
+
+		opts := sting.AttackOpts{
+			Rounds:      stingRounds,
+			Concurrency: stingConcurrency,
+			Delay:       stingDelay,
+			Verbose:     IsVerbose(),
+		}
+
+		pollen := sting.NewPollen()
+		result, err := pollen.Attack(ctx, stingTarget, opts)
+		if err != nil {
+			return fmt.Errorf("attack failed: %w", err)
+		}
+
+		fmt.Println("\n📊 Attack Results:")
+		fmt.Printf("   Total requests: %d\n", result.TotalRequests)
+		fmt.Printf("   Successful:     %d (%.1f%%)\n", result.Successful, float64(result.Successful)/float64(result.TotalRequests)*100)
+		fmt.Printf("   Failed:         %d\n", result.Failed)
+		fmt.Printf("   Duration:       %s\n", result.Duration.Round(time.Millisecond))
+		fmt.Printf("   Requests/sec:   %.2f\n", float64(result.TotalRequests)/result.Duration.Seconds())
+
+		return nil
+	},
+}
+
+// fireflyCmd represents the firefly (XMAS) attack
+var fireflyCmd = &cobra.Command{
+	Use:   "firefly",
+	Short: "Firefly - varied unusual HTTP headers attack",
+	Long: `Firefly lights up requests with varied unusual headers.
+Like bioluminescence, each request pattern is unique.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := common.RequireAuthorization(GetConfigPath()); err != nil {
+			return err
+		}
+		if stingTarget == "" {
+			return fmt.Errorf("--target is required")
+		}
+
+		fmt.Println("\n🪲 FIREFLY - Lighting up with varied headers...")
+		fmt.Printf("   Target: %s\n", stingTarget)
+		fmt.Printf("   Rounds: %d\n", stingRounds)
+		fmt.Printf("   Concurrency: %d\n", stingConcurrency)
+		fmt.Println()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigChan
+			fmt.Println("\n\n🛑 Received interrupt, stopping attack...")
+			cancel()
+		}()
+
+		opts := sting.AttackOpts{
+			Rounds:      stingRounds,
+			Concurrency: stingConcurrency,
+			Delay:       stingDelay,
+			Verbose:     IsVerbose(),
+		}
+
+		firefly := sting.NewFirefly()
+		result, err := firefly.Attack(ctx, stingTarget, opts)
+		if err != nil {
+			return fmt.Errorf("attack failed: %w", err)
+		}
+
+		fmt.Println("\n📊 Attack Results:")
+		fmt.Printf("   Total requests: %d\n", result.TotalRequests)
+		fmt.Printf("   Successful:     %d (%.1f%%)\n", result.Successful, float64(result.Successful)/float64(result.TotalRequests)*100)
+		fmt.Printf("   Failed:         %d\n", result.Failed)
+		fmt.Printf("   Duration:       %s\n", result.Duration.Round(time.Millisecond))
+		fmt.Printf("   Requests/sec:   %.2f\n", float64(result.TotalRequests)/result.Duration.Seconds())
+
+		return nil
+	},
+}
+
+// moltCmd represents the molt (DROPER) attack
+var moltCmd = &cobra.Command{
+	Use:   "molt",
+	Short: "Molt - HTTP method stress attack",
+	Long: `Molt sheds varied HTTP methods like an insect shedding its exoskeleton.
+Rotates through GET, POST, HEAD, OPTIONS, PUT, DELETE, PATCH.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := common.RequireAuthorization(GetConfigPath()); err != nil {
+			return err
+		}
+		if stingTarget == "" {
+			return fmt.Errorf("--target is required")
+		}
+
+		fmt.Println("\n🦎 MOLT - Shedding varied HTTP methods...")
+		fmt.Printf("   Target: %s\n", stingTarget)
+		fmt.Printf("   Rounds: %d\n", stingRounds)
+		fmt.Printf("   Concurrency: %d\n", stingConcurrency)
+		fmt.Println()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigChan
+			fmt.Println("\n\n🛑 Received interrupt, stopping attack...")
+			cancel()
+		}()
+
+		opts := sting.AttackOpts{
+			Rounds:      stingRounds,
+			Concurrency: stingConcurrency,
+			Delay:       stingDelay,
+			Verbose:     IsVerbose(),
+		}
+
+		molt := sting.NewMolt()
+		result, err := molt.Attack(ctx, stingTarget, opts)
+		if err != nil {
+			return fmt.Errorf("attack failed: %w", err)
+		}
+
+		fmt.Println("\n📊 Attack Results:")
+		fmt.Printf("   Total requests: %d\n", result.TotalRequests)
+		fmt.Printf("   Successful:     %d (%.1f%%)\n", result.Successful, float64(result.Successful)/float64(result.TotalRequests)*100)
+		fmt.Printf("   Failed:         %d\n", result.Failed)
+		fmt.Printf("   Duration:       %s\n", result.Duration.Round(time.Millisecond))
+		fmt.Printf("   Requests/sec:   %.2f\n", float64(result.TotalRequests)/result.Duration.Seconds())
+
+		return nil
+	},
+}
+
 func init() {
 	// Locust flags
 	locustCmd.Flags().StringVarP(&stingTarget, "target", "t", "", "target URL (required)")
@@ -224,7 +392,28 @@ func init() {
 	flyswarmCmd.Flags().IntVarP(&stingConcurrency, "concurrency", "c", 100, "number of concurrent workers")
 	flyswarmCmd.Flags().IntVarP(&stingPacketSize, "size", "s", 1024, "packet size in bytes")
 
+	// Pollen flags
+	pollenCmd.Flags().StringVarP(&stingTarget, "target", "t", "", "target URL (required)")
+	pollenCmd.Flags().IntVarP(&stingRounds, "rounds", "r", 1000, "number of requests to send")
+	pollenCmd.Flags().IntVarP(&stingConcurrency, "concurrency", "c", 100, "number of concurrent workers")
+	pollenCmd.Flags().DurationVarP(&stingDelay, "delay", "d", 0, "delay between requests per worker")
+
+	// Firefly flags
+	fireflyCmd.Flags().StringVarP(&stingTarget, "target", "t", "", "target URL (required)")
+	fireflyCmd.Flags().IntVarP(&stingRounds, "rounds", "r", 1000, "number of requests to send")
+	fireflyCmd.Flags().IntVarP(&stingConcurrency, "concurrency", "c", 100, "number of concurrent workers")
+	fireflyCmd.Flags().DurationVarP(&stingDelay, "delay", "d", 0, "delay between requests per worker")
+
+	// Molt flags
+	moltCmd.Flags().StringVarP(&stingTarget, "target", "t", "", "target URL (required)")
+	moltCmd.Flags().IntVarP(&stingRounds, "rounds", "r", 1000, "number of requests to send")
+	moltCmd.Flags().IntVarP(&stingConcurrency, "concurrency", "c", 100, "number of concurrent workers")
+	moltCmd.Flags().DurationVarP(&stingDelay, "delay", "d", 0, "delay between requests per worker")
+
 	stingCmd.AddCommand(locustCmd)
 	stingCmd.AddCommand(tickCmd)
 	stingCmd.AddCommand(flyswarmCmd)
+	stingCmd.AddCommand(pollenCmd)
+	stingCmd.AddCommand(fireflyCmd)
+	stingCmd.AddCommand(moltCmd)
 }
